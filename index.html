@@ -121,15 +121,28 @@
   function cardForTarget(name) {
     const card = document.createElement("article");
     card.className = "card";
-    card.innerHTML = `<h2>${name}</h2><div class="meta"></div>`;
+    const heading = document.createElement("h2");
+    heading.textContent = name;
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    card.append(heading, meta);
     return card;
   }
 
   function setMeta(card, entries) {
     const meta = card.querySelector(".meta");
-    meta.innerHTML = entries.map(([key, value]) =>
-      `<div class="key">${key}</div><div>${value}</div>`
-    ).join("");
+    meta.innerHTML = "";
+    for (const [key, value, className] of entries) {
+      const keyNode = document.createElement("div");
+      keyNode.className = "key";
+      keyNode.textContent = key;
+      const valueNode = document.createElement("div");
+      valueNode.textContent = value;
+      if (className) {
+        valueNode.classList.add(className);
+      }
+      meta.append(keyNode, valueNode);
+    }
   }
 
   function appendBlock(card, title, content) {
@@ -184,7 +197,7 @@
       setMeta(card, [
         ["请求地址", diagnostics.requestUrl],
         ["最终地址", diagnostics.finalUrl || "(不可用)"],
-        ["状态", diagnostics.ok ? `<span class="status-ok">${diagnostics.status}</span>` : `<span class="status-fail">${diagnostics.status}</span>`],
+        ["状态", diagnostics.status, diagnostics.ok ? "status-ok" : "status-fail"],
         ["耗时", `${diagnostics.elapsedMs} ms`],
         ["响应类型", diagnostics.responseType],
         ["浏览器在线状态", diagnostics.online ? "online" : "offline"]
@@ -196,7 +209,7 @@
       const elapsed = Math.round(performance.now() - startedAt);
       setMeta(card, [
         ["请求地址", diagnostics.requestUrl],
-        ["状态", `<span class="status-fail">请求失败</span>`],
+        ["状态", "请求失败", "status-fail"],
         ["耗时", `${elapsed} ms`],
         ["浏览器在线状态", diagnostics.online ? "online" : "offline"],
         ["错误类型", error && error.name ? error.name : "UnknownError"],
