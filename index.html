@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>网络诊断 - qianjunakasumi.moe</title>
+  <title>Network Diagnostics - qianjunakasumi.moe</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -39,6 +39,36 @@
     button:disabled {
       opacity: 0.6;
       cursor: wait;
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    .button-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      padding: 10px 16px;
+      text-decoration: none;
+      background: #0f766e;
+      color: #fff;
+      font-size: 14px;
+    }
+    label {
+      font-size: 14px;
+      color: #4b5563;
+    }
+    select {
+      margin-left: 6px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
+      background: #fff;
+      color: #111827;
     }
     .results {
       display: grid;
@@ -102,20 +132,96 @@
       .key {
         color: #9ca3af;
       }
+      select {
+        background: #111827;
+        color: #e5e7eb;
+        border-color: #374151;
+      }
     }
   </style>
 </head>
 <body>
 <main class="container">
-  <h1>网络诊断页面</h1>
-  <p>此页面会直接在你的浏览器请求目标域名，并显示连接、HTTP 与 CORS 相关结果，便于排查访问异常。</p>
-  <button id="runButton" type="button">开始诊断</button>
+  <h1 id="pageTitle"></h1>
+  <p id="pageDescription"></p>
+  <div class="toolbar">
+    <button id="runButton" type="button"></button>
+    <a id="statusLink" class="button-link" href="https://stats.uptimerobot.com/8VtkljQ4us" target="_blank" rel="noopener noreferrer"></a>
+    <label for="languageSelect">
+      <span id="languageText"></span>
+      <select id="languageSelect" aria-label="Language">
+        <option value="en">English</option>
+        <option value="zh-CN">简体中文</option>
+      </select>
+    </label>
+  </div>
   <section id="results" class="results" aria-live="polite"></section>
 </main>
 <script>
+  const i18n = {
+    en: {
+      title: "Network Diagnostics",
+      description: "This page requests target domains directly from your browser and shows connection, HTTP, and CORS diagnostics.",
+      run: "Run diagnostics",
+      statusPage: "Open status page",
+      language: "Language",
+      requestUrl: "Request URL",
+      finalUrl: "Final URL",
+      status: "Status",
+      duration: "Duration",
+      responseType: "Response type",
+      onlineState: "Browser online state",
+      errorType: "Error type",
+      errorMessage: "Error message",
+      pending: "Diagnosing...",
+      failed: "Request failed",
+      readableHeaders: "Readable response headers",
+      bodyPreview: "Response body preview (first 2000 chars)",
+      errorDetail: "Error details",
+      info: "Info",
+      errorHint: "A browser fetch can fail due to CORS policy, DNS failures, certificate errors, or network filtering.",
+      headerFallback: "(No readable headers, likely due to CORS restrictions)",
+      empty: "(empty)",
+      unavailable: "(unavailable)",
+      bodyReadFail: "Failed to read response body"
+    },
+    "zh-CN": {
+      title: "网络诊断页面",
+      description: "此页面会直接在你的浏览器请求目标域名，并显示连接、HTTP 与 CORS 相关结果，便于排查访问异常。",
+      run: "开始诊断",
+      statusPage: "前往状态页",
+      language: "语言",
+      requestUrl: "请求地址",
+      finalUrl: "最终地址",
+      status: "状态",
+      duration: "耗时",
+      responseType: "响应类型",
+      onlineState: "浏览器在线状态",
+      errorType: "错误类型",
+      errorMessage: "错误信息",
+      pending: "诊断中...",
+      failed: "请求失败",
+      readableHeaders: "可读响应头",
+      bodyPreview: "响应体预览（前 2000 字符）",
+      errorDetail: "错误详情",
+      info: "说明",
+      errorHint: "跨域策略、DNS 失败、证书错误或网络拦截都可能导致浏览器 fetch 直接失败。",
+      headerFallback: "(无可读响应头，可能是 CORS 限制)",
+      empty: "(空)",
+      unavailable: "(不可用)",
+      bodyReadFail: "读取响应体失败"
+    }
+  };
+
+  let currentLang = "en";
+
+  function t(key) {
+    return (i18n[currentLang] && i18n[currentLang][key]) || i18n.en[key] || key;
+  }
+
   const targets = [
-    { name: "id.qianjunakasumi", url: "https://id.qianjunakasumi/" },
-    { name: "qianjunakasumi.moe", url: "https://qianjunakasumi.moe/" }
+    { name: "www.qianjunakasumi.moe", url: "https://www.qianjunakasumi.moe/" },
+    { name: "id.qianjunakasumi.moe", url: "https://id.qianjunakasumi.moe/" }
   ];
 
   function cardForTarget(name) {
@@ -150,7 +256,7 @@
     const summary = document.createElement("summary");
     summary.textContent = title;
     const pre = document.createElement("pre");
-    pre.textContent = content || "(空)";
+    pre.textContent = content || t("empty");
     details.append(summary, pre);
     card.appendChild(details);
   }
@@ -160,7 +266,17 @@
     headers.forEach((value, key) => {
       list.push(`${key}: ${value}`);
     });
-    return list.length ? list.join("\n") : "(无可读响应头，可能是 CORS 限制)";
+    return list.length ? list.join("\n") : t("headerFallback");
+  }
+
+  function applyLanguage() {
+    document.documentElement.lang = currentLang;
+    document.title = `${t("title")} - qianjunakasumi.moe`;
+    document.getElementById("pageTitle").textContent = t("title");
+    document.getElementById("pageDescription").textContent = t("description");
+    document.getElementById("runButton").textContent = t("run");
+    document.getElementById("statusLink").textContent = t("statusPage");
+    document.getElementById("languageText").textContent = `${t("language")} `;
   }
 
   async function diagnose(url, card) {
@@ -191,37 +307,37 @@
       try {
         bodyText = await response.text();
       } catch (bodyError) {
-        bodyText = `读取响应体失败: ${bodyError.message}`;
+        bodyText = `${t("bodyReadFail")}: ${bodyError.message}`;
       }
 
       setMeta(card, [
-        ["请求地址", diagnostics.requestUrl],
-        ["最终地址", diagnostics.finalUrl || "(不可用)"],
-        ["状态", diagnostics.status, diagnostics.ok ? "status-ok" : "status-fail"],
-        ["耗时", `${diagnostics.elapsedMs} ms`],
-        ["响应类型", diagnostics.responseType],
-        ["浏览器在线状态", diagnostics.online ? "online" : "offline"]
+        [t("requestUrl"), diagnostics.requestUrl],
+        [t("finalUrl"), diagnostics.finalUrl || t("unavailable")],
+        [t("status"), diagnostics.status, diagnostics.ok ? "status-ok" : "status-fail"],
+        [t("duration"), `${diagnostics.elapsedMs} ms`],
+        [t("responseType"), diagnostics.responseType],
+        [t("onlineState"), diagnostics.online ? "online" : "offline"]
       ]);
 
-      appendBlock(card, "可读响应头", formatHeaders(response.headers));
-      appendBlock(card, "响应体预览（前 2000 字符）", bodyText.slice(0, 2000));
+      appendBlock(card, t("readableHeaders"), formatHeaders(response.headers));
+      appendBlock(card, t("bodyPreview"), bodyText.slice(0, 2000));
     } catch (error) {
       const elapsed = Math.round(performance.now() - startedAt);
       setMeta(card, [
-        ["请求地址", diagnostics.requestUrl],
-        ["状态", "请求失败", "status-fail"],
-        ["耗时", `${elapsed} ms`],
-        ["浏览器在线状态", diagnostics.online ? "online" : "offline"],
-        ["错误类型", error && error.name ? error.name : "UnknownError"],
-        ["错误信息", error && error.message ? error.message : String(error)]
+        [t("requestUrl"), diagnostics.requestUrl],
+        [t("status"), t("failed"), "status-fail"],
+        [t("duration"), `${elapsed} ms`],
+        [t("onlineState"), diagnostics.online ? "online" : "offline"],
+        [t("errorType"), error && error.name ? error.name : "UnknownError"],
+        [t("errorMessage"), error && error.message ? error.message : String(error)]
       ]);
 
-      appendBlock(card, "错误详情", JSON.stringify({
+      appendBlock(card, t("errorDetail"), JSON.stringify({
         name: error && error.name,
         message: error && error.message,
         stack: error && error.stack
       }, null, 2));
-      appendBlock(card, "说明", "跨域策略、DNS 失败、证书错误或网络拦截都可能导致浏览器 fetch 直接失败。");
+      appendBlock(card, t("info"), t("errorHint"));
     }
   }
 
@@ -233,7 +349,7 @@
 
     for (const target of targets) {
       const card = cardForTarget(target.name);
-      setMeta(card, [["状态", "诊断中..."]]);
+      setMeta(card, [[t("status"), t("pending")]]);
       results.appendChild(card);
       await diagnose(target.url, card);
     }
@@ -241,7 +357,13 @@
     runButton.disabled = false;
   }
 
+  document.getElementById("languageSelect").addEventListener("change", (event) => {
+    currentLang = event.target.value;
+    applyLanguage();
+    runDiagnosis();
+  });
   document.getElementById("runButton").addEventListener("click", runDiagnosis);
+  applyLanguage();
   runDiagnosis();
 </script>
 </body>

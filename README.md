@@ -1,10 +1,14 @@
 # diagnose.qianjunakasumi.moe
 
-用于浏览器端网络诊断的静态页面。
+A static browser-side diagnostics page.
 
-页面会在用户浏览器中直接请求：
+The page directly requests the following domains from the user's browser:
 
-- `https://id.qianjunakasumi/`
-- `https://qianjunakasumi.moe/`
+- `https://www.qianjunakasumi.moe/`
+- `https://id.qianjunakasumi.moe/`
 
-并展示请求耗时、状态码、可读响应头、响应体预览或错误信息，方便定位 DNS、网络连通性与 CORS 相关问题。
+It supports i18n (English as primary language, with Simplified Chinese option), and displays request duration, status, readable response headers, response body preview, or error details to help diagnose DNS, connectivity, and CORS issues.
+
+Status page link:
+
+- https://stats.uptimerobot.com/8VtkljQ4us
