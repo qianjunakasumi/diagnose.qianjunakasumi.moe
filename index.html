@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>网络诊断 - qianjunakasumi.moe</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+    body {
+      margin: 0;
+      padding: 24px;
+      background: #f5f7fb;
+      color: #111827;
+    }
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+    }
+    p {
+      margin: 0 0 16px;
+      line-height: 1.6;
+    }
+    button {
+      border: 0;
+      border-radius: 8px;
+      padding: 10px 16px;
+      background: #2563eb;
+      color: #fff;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+    .results {
+      display: grid;
+      gap: 16px;
+      margin-top: 20px;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+    }
+    .card h2 {
+      margin: 0 0 12px;
+      font-size: 18px;
+      word-break: break-all;
+    }
+    .meta {
+      display: grid;
+      grid-template-columns: minmax(120px, auto) 1fr;
+      gap: 6px 10px;
+      font-size: 14px;
+    }
+    .key {
+      color: #4b5563;
+    }
+    .status-ok {
+      color: #047857;
+      font-weight: 600;
+    }
+    .status-fail {
+      color: #b91c1c;
+      font-weight: 600;
+    }
+    details {
+      margin-top: 10px;
+    }
+    pre {
+      margin: 8px 0 0;
+      padding: 10px;
+      border-radius: 8px;
+      background: #111827;
+      color: #f9fafb;
+      overflow: auto;
+      font-size: 12px;
+      line-height: 1.4;
+      max-height: 260px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    @media (prefers-color-scheme: dark) {
+      body {
+        background: #0f172a;
+        color: #e5e7eb;
+      }
+      .card {
+        background: #111827;
+        border-color: #1f2937;
+      }
+      .key {
+        color: #9ca3af;
+      }
+    }
+  </style>
+</head>
+<body>
+<main class="container">
+  <h1>网络诊断页面</h1>
+  <p>此页面会直接在你的浏览器请求目标域名，并显示连接、HTTP 与 CORS 相关结果，便于排查访问异常。</p>
+  <button id="runButton" type="button">开始诊断</button>
+  <section id="results" class="results" aria-live="polite"></section>
+</main>
+<script>
+  const targets = [
+    { name: "id.qianjunakasumi", url: "https://id.qianjunakasumi/" },
+    { name: "qianjunakasumi.moe", url: "https://qianjunakasumi.moe/" }
+  ];
+
+  function cardForTarget(name) {
+    const card = document.createElement("article");
+    card.className = "card";
+    card.innerHTML = `<h2>${name}</h2><div class="meta"></div>`;
+    return card;
+  }
+
+  function setMeta(card, entries) {
+    const meta = card.querySelector(".meta");
+    meta.innerHTML = entries.map(([key, value]) =>
+      `<div class="key">${key}</div><div>${value}</div>`
+    ).join("");
+  }
+
+  function appendBlock(card, title, content) {
+    const details = document.createElement("details");
+    const summary = document.createElement("summary");
+    summary.textContent = title;
+    const pre = document.createElement("pre");
+    pre.textContent = content || "(空)";
+    details.append(summary, pre);
+    card.appendChild(details);
+  }
+
+  function formatHeaders(headers) {
+    const list = [];
+    headers.forEach((value, key) => {
+      list.push(`${key}: ${value}`);
+    });
+    return list.length ? list.join("\n") : "(无可读响应头，可能是 CORS 限制)";
+  }
+
+  async function diagnose(url, card) {
+    const startedAt = performance.now();
+    const diagnostics = {
+      requestUrl: url,
+      userAgent: navigator.userAgent,
+      online: navigator.onLine
+    };
+
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        mode: "cors",
+        cache: "no-store",
+        redirect: "follow",
+        credentials: "omit"
+      });
+
+      const elapsed = Math.round(performance.now() - startedAt);
+      diagnostics.elapsedMs = elapsed;
+      diagnostics.status = `${response.status} ${response.statusText || ""}`.trim();
+      diagnostics.ok = response.ok;
+      diagnostics.responseType = response.type;
+      diagnostics.finalUrl = response.url;
+
+      let bodyText = "";
+      try {
+        bodyText = await response.text();
+      } catch (bodyError) {
+        bodyText = `读取响应体失败: ${bodyError.message}`;
+      }
+
+      setMeta(card, [
+        ["请求地址", diagnostics.requestUrl],
+        ["最终地址", diagnostics.finalUrl || "(不可用)"],
+        ["状态", diagnostics.ok ? `<span class="status-ok">${diagnostics.status}</span>` : `<span class="status-fail">${diagnostics.status}</span>`],
+        ["耗时", `${diagnostics.elapsedMs} ms`],
+        ["响应类型", diagnostics.responseType],
+        ["浏览器在线状态", diagnostics.online ? "online" : "offline"]
+      ]);
+
+      appendBlock(card, "可读响应头", formatHeaders(response.headers));
+      appendBlock(card, "响应体预览（前 2000 字符）", bodyText.slice(0, 2000));
+    } catch (error) {
+      const elapsed = Math.round(performance.now() - startedAt);
+      setMeta(card, [
+        ["请求地址", diagnostics.requestUrl],
+        ["状态", `<span class="status-fail">请求失败</span>`],
+        ["耗时", `${elapsed} ms`],
+        ["浏览器在线状态", diagnostics.online ? "online" : "offline"],
+        ["错误类型", error && error.name ? error.name : "UnknownError"],
+        ["错误信息", error && error.message ? error.message : String(error)]
+      ]);
+
+      appendBlock(card, "错误详情", JSON.stringify({
+        name: error && error.name,
+        message: error && error.message,
+        stack: error && error.stack
+      }, null, 2));
+      appendBlock(card, "说明", "跨域策略、DNS 失败、证书错误或网络拦截都可能导致浏览器 fetch 直接失败。");
+    }
+  }
+
+  async function runDiagnosis() {
+    const runButton = document.getElementById("runButton");
+    const results = document.getElementById("results");
+    runButton.disabled = true;
+    results.innerHTML = "";
+
+    for (const target of targets) {
+      const card = cardForTarget(target.name);
+      setMeta(card, [["状态", "诊断中..."]]);
+      results.appendChild(card);
+      await diagnose(target.url, card);
+    }
+
+    runButton.disabled = false;
+  }
+
+  document.getElementById("runButton").addEventListener("click", runDiagnosis);
+  runDiagnosis();
+</script>
+</body>
+</html>
